@@ -4,5 +4,5 @@ Chowdhury Gomez, Junal
 Hinojosa Zamora, Frank
 Llanos Rosadio, Jose
 Mesajil Lopez, Cristian
-Trujillo Armas, Andrei
+Trujillo Armas, Andrei <andrei.trujillo.a@uni.pe>
 
