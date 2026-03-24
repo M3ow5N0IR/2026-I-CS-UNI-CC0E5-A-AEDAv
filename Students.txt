@@ -1,5 +1,5 @@
 # 1. Cuadros-Vargas, Ernesto <ecuadros@spc.org.pe>,
-Chipana Calderon, Guido
+# 2. Chipana Calderon, Guido <guido.chipana.c@uni.pe>,
 Chowdhury Gomez, Junal
 Hinojosa Zamora, Frank
 Llanos Rosadio, Jose
