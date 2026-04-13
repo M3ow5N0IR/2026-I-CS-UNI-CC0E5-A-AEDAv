@@ -33,4 +33,17 @@ void DemoVector(){
     of << v2 << endl;
     // of.close();
     
+    // DEMOSTRACIÓN DEL TOD0 (OPERATOR >>)
+    cout << "\n--- DEMO TODO OPERATOR >> ---" << endl;
+    string textoFalso = "[100, 200, 300]";
+    istringstream input(textoFalso);
+    
+    Vector<T1> v3(10);
+    cout << "Intentando leer el flujo de datos: " << textoFalso << endl;
+    
+    if (input >> v3) {
+        cout << "¡Exito! El Vector absorbio los datos: " << v3 << endl;
+    } else {
+        cout << "Error: El formato ingresado no era el correcto." << endl;
+    }
 }
