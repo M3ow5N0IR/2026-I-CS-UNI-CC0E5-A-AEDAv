@@ -74,11 +74,53 @@ private:
     mutable shared_mutex m_mtx;
 public:
     LinkedList() {}
-    LinkedList(const LinkedList &other){ // Copy constructor
+    // T1: Copy constructor
+    LinkedList(const LinkedList &other){ 
+        shared_lock<shared_mutex> lock(other.m_mtx);
+        Node* pOther = other.m_pRoot;
+        while(pOther) {
+            Node* newNode = new Node(pOther->getData(), nullptr);
+            if (!m_pRoot) {
+                m_pRoot = m_tail = newNode;
+            } else {
+                m_tail->setNext(newNode);
+                m_tail = newNode;
+            }
+            m_size++;
+            pOther = pOther->getNext();
+        }
     }
+    
     LinkedList(LinkedList &&other){ // Move constructor
     }
+    
     LinkedList& operator=(const LinkedList &other){ // Copy assignment operator
+        if(this == &other) return *this;
+        
+        scoped_lock lock(m_mtx, other.m_mtx); 
+        
+        Node *pCurr = m_pRoot;
+        while(pCurr) {
+            Node *pNext = pCurr->getNext();
+            delete pCurr;
+            pCurr = pNext;
+        }
+        m_pRoot = m_tail = nullptr;
+        m_size = 0;
+        
+        Node* pOther = other.m_pRoot;
+        while(pOther) {
+            Node* newNode = new Node(pOther->getData(), nullptr);
+            if (!m_pRoot) {
+                m_pRoot = m_tail = newNode;
+            } else {
+                m_tail->setNext(newNode);
+                m_tail = newNode;
+            }
+            m_size++;
+            pOther = pOther->getNext();
+        }
+        return *this;
     }
     LinkedList& operator=(LinkedList &&other){ // Move assignment operator
     }
