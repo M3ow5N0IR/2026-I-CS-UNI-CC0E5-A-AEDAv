@@ -153,7 +153,20 @@ public:
         return *this;
     }
     
-    virtual        ~LinkedList() {}
+    // T3: Destructor seguro
+    virtual ~LinkedList() {
+        
+        unique_lock<shared_mutex> lock(m_mtx); 
+        
+        Node *pCurr = m_pRoot;
+        while(pCurr) {
+            Node *pNext = pCurr->getNext();
+            delete pCurr;
+            pCurr = pNext;
+        }
+        m_pRoot = m_tail = nullptr;
+        m_size = 0;
+    }
     virtual void    push_front(value_type value, Ref ref);
     virtual void    pop_front();
     virtual void    push_back(value_type value, Ref ref);
