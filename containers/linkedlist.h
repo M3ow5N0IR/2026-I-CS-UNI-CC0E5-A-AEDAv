@@ -90,8 +90,16 @@ public:
             pOther = pOther->getNext();
         }
     }
-    
-    LinkedList(LinkedList &&other){ // Move constructor
+    // T2: Move constructor
+    LinkedList(LinkedList &&other){ 
+        unique_lock<shared_mutex> lock(other.m_mtx);
+        m_pRoot = other.m_pRoot;
+        m_tail  = other.m_tail;
+        m_size  = other.m_size;
+        
+        other.m_pRoot = nullptr;
+        other.m_tail  = nullptr;
+        other.m_size  = 0;
     }
     
     LinkedList& operator=(const LinkedList &other){ // Copy assignment operator
@@ -123,6 +131,26 @@ public:
         return *this;
     }
     LinkedList& operator=(LinkedList &&other){ // Move assignment operator
+        if(this == &other) return *this;
+        
+        scoped_lock lock(m_mtx, other.m_mtx); 
+        
+        Node *pCurr = m_pRoot;
+        while(pCurr) {
+            Node *pNext = pCurr->getNext();
+            delete pCurr;
+            pCurr = pNext;
+        }
+        
+        m_pRoot = other.m_pRoot;
+        m_tail  = other.m_tail;
+        m_size  = other.m_size;
+        
+        other.m_pRoot = nullptr;
+        other.m_tail  = nullptr;
+        other.m_size  = 0;
+        
+        return *this;
     }
     
     virtual        ~LinkedList() {}
