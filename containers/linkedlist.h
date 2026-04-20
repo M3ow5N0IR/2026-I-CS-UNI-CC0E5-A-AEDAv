@@ -276,6 +276,30 @@ void LinkedList<T>::insert(const value_type &value, Ref ref){
     internal_insert(m_pRoot, value, ref);
 }
 
-
+// T10: operator>>
+template <typename Trait>
+istream& operator>>(istream& is, LinkedList<Trait>& list){
+    char c;
+    if (!(is >> c) || c != '[') {
+        is.setstate(ios::failbit);
+        return is;
+    }
+    
+    while (is >> c) {
+        if (c == ']') break;
+        if (c == ',') continue;
+        
+        is.putback(c);
+        
+        typename Trait::value_type value; 
+        if (is >> value) {
+            list.insert(value, Ref()); 
+        } else {
+            is.setstate(ios::failbit);
+            break;
+        }
+    }
+    return is;
+}
 
 #endif // __LINKEDLIST_H__
