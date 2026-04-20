@@ -171,7 +171,13 @@ public:
         m_pRoot = m_tail = nullptr;
         m_size = 0;
     }
-    virtual void    push_front(value_type value, Ref ref);
+    // T5: push_front
+    virtual void push_front(value_type value, Ref ref) {
+        unique_lock<shared_mutex> lock(m_mtx);
+        m_pRoot = new Node(value, m_pRoot);
+        if (m_size == 0) m_tail = m_pRoot;
+        m_size++;
+    }
     virtual void    pop_front();
     virtual void    push_back(value_type value, Ref ref);
     virtual void    pop_back();
