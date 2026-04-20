@@ -232,7 +232,19 @@ private:
 public:
     virtual void    insert(const value_type &value, Ref ref);
     
-    virtual value_type& operator[](size_t index);
+    // T9: operator[]
+    virtual value_type& operator[](size_t index) {
+        shared_lock<shared_mutex> lock(m_mtx); 
+        if (index >= m_size) {
+            throw out_of_range("Index out of bounds");
+        }
+        
+        Node* pCurr = m_pRoot;
+        for (size_t i = 0; i < index; ++i) {
+            pCurr = pCurr->getNext();
+        }
+        return pCurr->getDataRef();
+    }
     virtual size_t  size() const;
     virtual string  toString() const;
 
