@@ -261,8 +261,8 @@ public:
     }
 };
 
-template <typename T>
-void LinkedList<T>::internal_insert(Node* &pPr  ev, const value_type &value, Ref ref){
+template <typename Trait>
+void LinkedList<Trait>::internal_insert(Node* &pPrev, const value_type &value, Ref ref){
     if(!pPrev || m_comp(value, pPrev->getDataRef())){
         pPrev = new Node(value, ref, pPrev);
         m_size++;
@@ -273,8 +273,10 @@ void LinkedList<T>::internal_insert(Node* &pPr  ev, const value_type &value, Ref
     internal_insert(pPrev->getNextRef(), value, ref);
 }
 
-template <typename T>
-void LinkedList<T>::insert(const value_type &value, Ref ref){
+template <typename Trait>
+void LinkedList<Trait>::insert(const value_type &value, Ref ref){
+    // T13
+    unique_lock<shared_mutex> lock(m_mtx);
     internal_insert(m_pRoot, value, ref);
 }
 
