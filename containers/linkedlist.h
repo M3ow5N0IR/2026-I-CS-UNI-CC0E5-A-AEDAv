@@ -251,10 +251,12 @@ public:
     forward_iterator begin() { return forward_iterator(this, m_pRoot); }
     forward_iterator end()   { return forward_iterator(this, nullptr); }
 
-    // Agregar Foreach
+    // T12: ForEach (Soporte Genérico de Funciones y Argumentos Variables)
     template <typename Func, typename... Args>
     void ForEach(Func func, Args &&...  args){
+        // T13
         unique_lock<shared_mutex> lock(m_mtx);
+        if (m_size == 0) return; // Parche de Retorno Temprano 
         ::ForEach(begin(), end(), func, std::forward<Args>(args)... );
     }
 };
