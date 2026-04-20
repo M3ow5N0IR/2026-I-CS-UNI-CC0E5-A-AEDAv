@@ -5,6 +5,7 @@
 #include <cstddef> // size_t
 #include <string>
 #include <sstream>
+#include <mutex>
 #include <shared_mutex> // shared_mutex
 #include "general_iterator.h"
 #include "util.h"
@@ -14,6 +15,7 @@ using namespace std;
 // Forward iterator
 template <typename Container>
 class LinkedListForwardIterator : public general_iterator<Container, LinkedListForwardIterator<Container>>{
+public:
     using MySelf = LinkedListForwardIterator<Container>;
     using Parent = general_iterator<Container, MySelf>;
     using Parent::Parent;
@@ -29,17 +31,24 @@ template <typename T>
 class LLNode{
     using Node = LLNode<T>;
 private:
-    T   m_data;
+    T    m_data;
+    Ref  m_ref;
     Node *m_next;
 public:
-    LLNode() : m_data(T()), m_next(nullptr) {}
-    LLNode(T data) : m_data(data), m_next(nullptr) {}
-    LLNode(T data, Node *next) : m_data(data), m_next(next) {}
+    LLNode() : m_data(T()), m_ref(Ref()), m_next(nullptr) {}
+    LLNode(T data) : m_data(data), m_ref(Ref()), m_next(nullptr) {}
+    LLNode(T data, Node *next) : m_data(data), m_ref(Ref()), m_next(next) {}
+    LLNode(T data, Ref ref, Node *next) : m_data(data), m_ref(ref), m_next(next) {}
     virtual ~LLNode() {}
 
     T      getData() const { return m_data; }
     T&     getDataRef()    { return m_data; }
     void   setData(T data) { m_data = data; }
+    
+    Ref    getRef() const  { return m_ref; }
+    Ref&   getRefRef()     { return m_ref; }
+    void   setRef(Ref ref) { m_ref = ref; }
+
     Node*  getNext() const { return m_next; }
     Node*& getNextRef()    { return m_next; }
     void   setNext(Node *next) { m_next = next; }
