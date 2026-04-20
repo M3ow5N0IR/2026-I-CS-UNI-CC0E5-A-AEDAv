@@ -190,7 +190,18 @@ public:
         m_size--;
         if (m_size == 0) m_tail = nullptr;
     }
-    virtual void    push_back(value_type value, Ref ref);
+    // T7: push_back
+    virtual void push_back(value_type value, Ref ref) {
+        unique_lock<shared_mutex> lock(m_mtx);
+        Node* newNode = new Node(value, nullptr);
+        if (!m_pRoot) {
+            m_pRoot = m_tail = newNode;
+        } else {
+            m_tail->setNext(newNode);
+            m_tail = newNode;
+        }
+        m_size++;
+    }
     virtual void    pop_back();
 private:
             void    internal_insert(Node* &pParent, const value_type &value, Ref ref);
