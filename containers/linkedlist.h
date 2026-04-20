@@ -302,4 +302,34 @@ istream& operator>>(istream& is, LinkedList<Trait>& list){
     return is;
 }
 
+// implementacion auxiliar de lectura segura
+template <typename Trait>
+size_t LinkedList<Trait>::size() const {
+    shared_lock<shared_mutex> lock(m_mtx);
+    return m_size;
+}
+
+// implementacion auxiliar (String Format)
+template <typename Trait>
+string LinkedList<Trait>::toString() const {
+    shared_lock<shared_mutex> lock(m_mtx);
+    ostringstream oss;
+    oss << "[";
+    Node* pCurr = m_pRoot;
+    while (pCurr) {
+        if (pCurr != m_pRoot)
+            oss << ",";
+        oss << pCurr->getData();
+        pCurr = pCurr->getNext();
+    }
+    oss << "]";
+    return oss.str();
+}
+
+// T11: operator<<
+template <typename Trait>
+ostream& operator<<(ostream& os, const LinkedList<Trait>& list) {
+    return os << list.toString();
+}
+
 #endif // __LINKEDLIST_H__
