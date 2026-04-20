@@ -178,7 +178,18 @@ public:
         if (m_size == 0) m_tail = m_pRoot;
         m_size++;
     }
-    virtual void    pop_front();
+    // T6: pop_front
+    virtual void pop_front() {
+        unique_lock<shared_mutex> lock(m_mtx);
+        if (!m_pRoot) return;
+        
+        Node* pTemp = m_pRoot;
+        m_pRoot = m_pRoot->getNext();
+        delete pTemp;
+        
+        m_size--;
+        if (m_size == 0) m_tail = nullptr;
+    }
     virtual void    push_back(value_type value, Ref ref);
     virtual void    pop_back();
 private:
