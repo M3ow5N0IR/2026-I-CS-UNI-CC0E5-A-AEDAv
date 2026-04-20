@@ -202,7 +202,31 @@ public:
         }
         m_size++;
     }
-    virtual void    pop_back();
+    // T8: pop_back
+    virtual void pop_back() {
+        unique_lock<shared_mutex> lock(m_mtx);
+        if (!m_pRoot) return;
+        
+        // Caso particular: Si solo queda 1 elemento
+        if (m_pRoot == m_tail) {
+            delete m_pRoot;
+            m_pRoot = m_tail = nullptr;
+            m_size = 0;
+            return;
+        }
+        
+        // Rastreo exhaustivo: Buscar a la penúltima caja 
+        Node* pCurr = m_pRoot;
+        while (pCurr->getNext() != m_tail) {
+            pCurr = pCurr->getNext();
+        }
+        
+        // Aniquilamos al antiguo tail, y la penúltima caja es ascendida a Tail
+        delete m_tail;
+        pCurr->setNext(nullptr);
+        m_tail = pCurr;
+        m_size--;
+    }
 private:
             void    internal_insert(Node* &pParent, const value_type &value, Ref ref);
 public:
