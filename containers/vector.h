@@ -80,10 +80,24 @@ private:
     void    resize();
 public:
     Vector(size_t capacity = 10);
+    Vector(const Vector& other);
+    Vector& operator=(const Vector& other);
     virtual ~Vector();
-    virtual void push_back(value_type value, Ref ref);
+    virtual void   push_back(value_type value, Ref ref);
+    virtual void   pop_back();
     virtual size_t size() const;
     virtual string toString() const;
+
+    value_type& operator[](size_t index) {
+        shared_lock<shared_mutex> lock(m_mtx);
+        if (index >= m_size) throw out_of_range("indice fuera de rango");
+        return m_data[index].getDataRef();
+    }
+    const value_type& operator[](size_t index) const {
+        shared_lock<shared_mutex> lock(m_mtx);
+        if (index >= m_size) throw out_of_range("indice fuera de rango");
+        return m_data[index].getDataRef();
+    }
 
     forward_iterator begin() { return forward_iterator(this, m_data); }
     forward_iterator end()   { return forward_iterator(this, m_data + m_size); }
@@ -116,8 +130,38 @@ Vector<T>::Vector(size_t capacity){
 }
 
 template <typename T>
+Vector<T>::Vector(const Vector& other){
+    shared_lock<shared_mutex> lock(other.m_mtx);
+    m_capacity = other.m_capacity;
+    m_size     = other.m_size;
+    m_data     = new Node[m_capacity];
+    for(size_t i = 0; i < m_size; ++i) m_data[i] = other.m_data[i];
+}
+
+template <typename T>
+Vector<T>& Vector<T>::operator=(const Vector& other){
+    if(this != &other){
+        shared_lock<shared_mutex> olock(other.m_mtx);
+        unique_lock<shared_mutex> lock(m_mtx);
+        delete[] m_data;
+        m_capacity = other.m_capacity;
+        m_size     = other.m_size;
+        m_data     = new Node[m_capacity];
+        for(size_t i = 0; i < m_size; ++i) m_data[i] = other.m_data[i];
+    }
+    return *this;
+}
+
+template <typename T>
 Vector<T>::~Vector(){
     delete [] m_data;
+}
+
+template <typename T>
+void Vector<T>::pop_back(){
+    unique_lock<shared_mutex> lock(m_mtx);
+    if (m_size == 0) throw out_of_range("vector vacio");
+    --m_size;
 }
 
 template <typename T>
