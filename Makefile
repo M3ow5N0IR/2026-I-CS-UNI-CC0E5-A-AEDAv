@@ -6,7 +6,9 @@ TARGET = main
 SRCS = main.cpp \
 	   containers/ListsDemo.cpp \
 	   containers/TreeDemo.cpp \
-	   containers/avlDemo.cpp
+	   containers/avlDemo.cpp \
+	   containers/DemoHeap.cpp \
+	   containers/DemoHashTable.cpp
 
 OBJS = $(SRCS:.cpp=.o)
 

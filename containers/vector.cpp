@@ -6,7 +6,7 @@
 #include "vector.h"
 using namespace std;
 
-void AddOne(int& n){
+void AddOne(T1& n){
     static mutex mtx;
     scoped_lock lock(mtx);
     ++n;
@@ -73,8 +73,8 @@ void DemoConcurrentVector(){
 
     // Cada thread itera el vector 100,000 veces e incrementa cada elemento
     // Sin sincronizacion → race condition en los contadores
-    auto worker = [&v](int thread_id){
-        for(int i = 0; i < 100000; i++)
+    auto worker = [&v](Ref thread_id){
+        for(size_t i = 0; i < 100000; ++i)
             v.ForEach(AddOne);
         cout << "Thread " << thread_id << " terminado\n";
     };

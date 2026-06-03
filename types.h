@@ -17,4 +17,7 @@ using Ref = long;
 using Height = int;
 using Balance = int;
 
+using Char      = char; 
+using Direction = int;
+
 #endif // __TYPES_H__

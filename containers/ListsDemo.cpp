@@ -45,7 +45,7 @@ void LinkedListDemo() {
 
     // Concurrencia: 5 hilos x 1000 push_front, esperamos 5000.
     LinkedList<AscendingTrait<LLNode<T1>>> lc;
-    auto worker = [&lc](int id) { for (int i = 0; i < 1000; i++) lc.push_front(i, id); };
+    auto worker = [&lc](Ref id) { for (size_t i = 0; i < 1000; ++i) lc.push_front((T1)i, id); };
     thread t1(worker, 1), t2(worker, 2), t3(worker, 3), t4(worker, 4), t5(worker, 5);
     t1.join(); t2.join(); t3.join(); t4.join(); t5.join();
     cout << "concurrencia (esperado 5000): " << lc.size() << endl;

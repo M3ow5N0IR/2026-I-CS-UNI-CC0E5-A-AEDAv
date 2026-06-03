@@ -133,10 +133,18 @@ protected:
     Comp   m_comp;
     mutable shared_mutex m_mtx;
 
+    
+    virtual Node* make_node(const value_type& data, Ref ref) {
+        if constexpr (std::is_constructible_v<Node, const value_type&, Ref>) {
+            return new Node(data, ref);
+        } else {
+            return nullptr; 
+        }
+    }
+
     // internal_insert
     virtual Node* internal_insert(Node* pNode, const value_type& data, Ref ref) {
-        if (!pNode) return new Node(data, ref);
-        
+        if (!pNode) return make_node(data, ref);
         auto rama = m_comp(pNode->m_data, data);
         pNode->m_pChild[rama] = internal_insert(pNode->m_pChild[rama], data, ref);
         return pNode;
@@ -150,10 +158,10 @@ protected:
         delete pNode;
     }
 
-    // Copy constructor 
+    // Copy constructor
     virtual Node* internal_copy(Node* pNode) {
         if (!pNode) return nullptr;
-        Node* clon = new Node(pNode->m_data, pNode->m_ref);
+        Node* clon = make_node(pNode->m_data, pNode->m_ref);
         clon->m_pChild[0] = internal_copy(pNode->m_pChild[0]);
         clon->m_pChild[1] = internal_copy(pNode->m_pChild[1]);
         return clon;
@@ -338,9 +346,9 @@ public:
 
     // operator>> 
     friend istream& operator>>(istream& is, BinaryTree& arbol) {
-        char ch;
+        Char ch;
         if (!(is >> ch) || ch != '[') { is.clear(ios_base::failbit); return is; }
-        value_type val; Ref ref; char coma, parC;
+        value_type val; Ref ref; Char coma, parC;
         while (is >> ch && ch != ']')
             if (ch == '(')
                 if (is >> val >> coma >> ref >> parC)
@@ -353,7 +361,7 @@ public:
     void printTree(ostream& os = cout) const {
         shared_lock<shared_mutex> lock(m_mtx);
         if (!m_pRoot) { os << "(arbol vacio)" << endl; return; }
-        Vector<Node*> cola(64);
+        Vector<VectorTrait<Node*>> cola(64);
         size_t inicioNivel = 0;
         cola.push_back(m_pRoot, 0);
         while (inicioNivel < cola.size()) {

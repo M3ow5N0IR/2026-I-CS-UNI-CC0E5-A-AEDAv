@@ -4,18 +4,18 @@
 #include <stdexcept>
 #include <shared_mutex>
 #include "vector.h"
+#include "traits.h"
 using namespace std;
 
-// Stack basado en Vector
+// Stack basado en Vector<VectorTrait<T>>
 template<typename T>
 class Stack {
-    Vector<T>            m_vec;
-    mutable shared_mutex m_mtx;
+    Vector<VectorTrait<T>> m_vec;
+    mutable shared_mutex   m_mtx;
 
 public:
     Stack(size_t capacity = 64) : m_vec(capacity) {}
 
-    // copy constructor
     Stack(const Stack& other) : m_vec(other.m_vec.size() + 64) {
         shared_lock<shared_mutex> lock(other.m_mtx);
         for (size_t i = 0; i < other.m_vec.size(); ++i)
@@ -26,7 +26,7 @@ public:
         if (this != &other) {
             unique_lock<shared_mutex> lock(m_mtx);
             shared_lock<shared_mutex> olock(other.m_mtx);
-            m_vec = Vector<T>(other.m_vec.size() + 64);
+            m_vec = Vector<VectorTrait<T>>(other.m_vec.size() + 64);
             for (size_t i = 0; i < other.m_vec.size(); ++i)
                 m_vec.push_back(other.m_vec[i], 0);
         }

@@ -74,7 +74,7 @@ protected:
     // Override internal_copy para preservar m_height de cada nodo
     Node* internal_copy(Node* pNode) override {
         if (!pNode) return nullptr;
-        Node* clon        = new Node(pNode->m_data, pNode->m_ref);
+        Node* clon        = this->make_node(pNode->m_data, pNode->m_ref);
         clon->m_height    = pNode->m_height;
         clon->m_pChild[0] = internal_copy(pNode->m_pChild[0]);
         clon->m_pChild[1] = internal_copy(pNode->m_pChild[1]);
