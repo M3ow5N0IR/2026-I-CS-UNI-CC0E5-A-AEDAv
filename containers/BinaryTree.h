@@ -5,6 +5,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <tuple>
+#include <climits>
 #include <shared_mutex>
 #include <type_traits>
 #include "stack.h"
@@ -13,69 +14,90 @@
 #include "traits.h"
 using namespace std;
 
-// BinaryTreeNode
-template<typename T, typename DerivedNode = void>
+// Node en BinaryTree 
+template<typename T, typename Self = void>
 struct BinaryTreeNode {
     using value_type = T;
-    using Node = std::conditional_t<std::is_void_v<DerivedNode>, BinaryTreeNode, DerivedNode>;
+    using Node = conditional_t<is_void_v<Self>, BinaryTreeNode, Self>;
 
     T     m_data;
     Ref   m_ref;
-    Node *m_pChild[2];
+    Node* m_pChild[2];
 
-    BinaryTreeNode(T data, Ref ref) : m_data(data), m_ref(ref), m_pChild{nullptr, nullptr} {}
+    BinaryTreeNode(T data, Ref ref = 0)
+        : m_data(data), m_ref(ref), m_pChild{nullptr, nullptr} {}
+
+    T&  getDataRef() { return m_data; }
+    Ref getRef()     { return m_ref; }
 };
 
-// BTIteratorBase: precarga el recorrido en un Stack y avanza por indice
-template<typename Node, typename value_type>
-class BTIteratorBase {
+// tree_iterator
+template<typename Container, class IteratorBase>
+class tree_iterator {
+public:
+    using Node       = typename Container::Node;
+    using value_type = typename Container::value_type;
+    using myself     = tree_iterator<Container, IteratorBase>;
+
 protected:
-    Stack<Node*> m_nodes;
-    ptrdiff_t    m_index;
+    Stack<Node*> m_stack;
+    size_t       m_idx;
 
 public:
-    BTIteratorBase() : m_index(0) {}
-    BTIteratorBase(Stack<Node*> s, ptrdiff_t idx) : m_nodes(s), m_index(idx) {}
+    tree_iterator(Stack<Node*> s, size_t idx) : m_stack(s), m_idx(idx) {}
 
-    value_type& operator*() const { return m_nodes[m_index]->m_data; }
-    Node*       getNode()   const { return m_nodes[m_index]; }
+    Node* getNode() const { return m_stack[m_idx]; }
 
-    bool operator==(const BTIteratorBase& o) const { return m_index == o.m_index; }
-    bool operator!=(const BTIteratorBase& o) const { return m_index != o.m_index; }
+    friend bool operator==(const IteratorBase& a, const IteratorBase& b) {
+        return a.m_idx == b.m_idx;
+    }
+    friend bool operator!=(const IteratorBase& a, const IteratorBase& b) {
+        return a.m_idx != b.m_idx;
+    }
+
+    value_type& operator*() { return m_stack[m_idx]->getDataRef(); }
 };
 
-// Forward iterator inorder/preorder/postorder
-template<typename Node, typename value_type>
-class BTForwardIterator : public BTIteratorBase<Node, value_type> {
+// Forward iterator del arbol
+template<typename Container>
+class tree_forward_iterator : public tree_iterator<Container, tree_forward_iterator<Container>> {
 public:
-    using BTIteratorBase<Node, value_type>::BTIteratorBase;
-    BTForwardIterator& operator++() { ++this->m_index; return *this; }
+    using MySelf = tree_forward_iterator<Container>;
+    using Parent = tree_iterator<Container, MySelf>;
+    using Parent::Parent;
+
+    MySelf& operator++() { ++this->m_idx; return *this; }
 };
 
-// Backward iterator inorder/preorder/postorder
-template<typename Node, typename value_type>
-class BTBackwardIterator : public BTIteratorBase<Node, value_type> {
+// Backward iterator 
+template<typename Container>
+class tree_backward_iterator : public tree_iterator<Container, tree_backward_iterator<Container>> {
 public:
-    using BTIteratorBase<Node, value_type>::BTIteratorBase;
-    BTBackwardIterator& operator++() { --this->m_index; return *this; }
+    using MySelf = tree_backward_iterator<Container>;
+    using Parent = tree_iterator<Container, MySelf>;
+    using Parent::Parent;
+
+    MySelf& operator++() {
+        if (this->m_idx == 0) this->m_idx = SIZE_MAX;
+        else                  --this->m_idx;
+        return *this;
+    }
 };
 
-// Mejora libre #2: TraversalView agrupa begin/end/rbegin/rend + forEach/rForEach
-template<typename ForwardIt, typename BackwardIt>
+// TraversalView
+template<typename FwdIt, typename BwdIt>
 class TraversalView {
-    ForwardIt  m_begin;
-    ForwardIt  m_end;
-    BackwardIt m_rbegin;
-    BackwardIt m_rend;
+    FwdIt m_begin, m_end;
+    BwdIt m_rbegin, m_rend;
 
 public:
-    TraversalView(ForwardIt b, ForwardIt e, BackwardIt rb, BackwardIt re)
+    TraversalView(FwdIt b, FwdIt e, BwdIt rb, BwdIt re)
         : m_begin(b), m_end(e), m_rbegin(rb), m_rend(re) {}
 
-    ForwardIt  begin()  const { return m_begin;  }
-    ForwardIt  end()    const { return m_end;    }
-    BackwardIt rbegin() const { return m_rbegin; }
-    BackwardIt rend()   const { return m_rend;   }
+    FwdIt begin()  const { return m_begin;  }
+    FwdIt end()    const { return m_end;    }
+    BwdIt rbegin() const { return m_rbegin; }
+    BwdIt rend()   const { return m_rend;   }
 
     template<typename Func, typename... Args>
     void forEach(Func func, Args&&... args) {
@@ -90,31 +112,34 @@ public:
     }
 };
 
-// BinaryTree
 template<typename Trait>
 class BinaryTree {
 public:
     using value_type = typename Trait::value_type;
     using Node       = typename Trait::Node;
     using Comp       = typename Trait::Comp;
+    using MySelf     = BinaryTree<Trait>;
 
-    using ForwardIt  = BTForwardIterator <Node, value_type>;
-    using BackwardIt = BTBackwardIterator<Node, value_type>;
+    using FwdIt = tree_forward_iterator<MySelf>;
+    using BwdIt = tree_backward_iterator<MySelf>;
+    using View  = TraversalView<FwdIt, BwdIt>;
 
-    using InorderView   = TraversalView<ForwardIt, BackwardIt>;
-    using PreorderView  = TraversalView<ForwardIt, BackwardIt>;
-    using PostorderView = TraversalView<ForwardIt, BackwardIt>;
+    friend FwdIt;
+    friend BwdIt;
 
 protected:
-    Node                *m_pRoot;
-    Comp                 m_comp;
+    Node*  m_pRoot;
+    size_t m_size;
+    Comp   m_comp;
     mutable shared_mutex m_mtx;
 
     // internal_insert
-    virtual void internal_insert(Node* &pNode, const value_type &data, Ref ref) {
-        if (!pNode) { pNode = new Node(data, ref); return; }
-        auto branch = !m_comp(data, pNode->m_data);
-        internal_insert(pNode->m_pChild[branch], data, ref);
+    virtual Node* internal_insert(Node* pNode, const value_type& data, Ref ref) {
+        if (!pNode) return new Node(data, ref);
+        
+        auto rama = m_comp(pNode->m_data, data);
+        pNode->m_pChild[rama] = internal_insert(pNode->m_pChild[rama], data, ref);
+        return pNode;
     }
 
     // Destructor seguro
@@ -125,30 +150,25 @@ protected:
         delete pNode;
     }
 
-    // Copy constructor
+    // Copy constructor 
     virtual Node* internal_copy(Node* pNode) {
         if (!pNode) return nullptr;
-        Node* n = new Node(pNode->m_data, pNode->m_ref);
-        n->m_pChild[0] = internal_copy(pNode->m_pChild[0]);
-        n->m_pChild[1] = internal_copy(pNode->m_pChild[1]);
-        return n;
+        Node* clon = new Node(pNode->m_data, pNode->m_ref);
+        clon->m_pChild[0] = internal_copy(pNode->m_pChild[0]);
+        clon->m_pChild[1] = internal_copy(pNode->m_pChild[1]);
+        return clon;
     }
 
-    // Mejora libre #1: search recursivo
+    // Search recursivo
     virtual Node* internal_search(Node* pNode, const value_type& data) const {
         if (!pNode) return nullptr;
         if (!m_comp(data, pNode->m_data) && !m_comp(pNode->m_data, data))
             return pNode;
-        auto branch = !m_comp(data, pNode->m_data);
-        return internal_search(pNode->m_pChild[branch], data);
+        auto rama = m_comp(pNode->m_data, data);
+        return internal_search(pNode->m_pChild[rama], data);
     }
 
-    virtual size_t internal_size(Node* n) const {
-        if (!n) return 0;
-        return 1 + internal_size(n->m_pChild[0]) + internal_size(n->m_pChild[1]);
-    }
-
-    // Forward iterator inorder
+    // Recorridos
     void fill_inorder(Node* n, Stack<Node*>& s) const {
         if (!n) return;
         fill_inorder(n->m_pChild[0], s);
@@ -156,7 +176,6 @@ protected:
         fill_inorder(n->m_pChild[1], s);
     }
 
-    // Forward iterator preorder
     void fill_preorder(Node* n, Stack<Node*>& s) const {
         if (!n) return;
         s.push(n);
@@ -164,7 +183,6 @@ protected:
         fill_preorder(n->m_pChild[1], s);
     }
 
-    // Forward iterator postorder
     void fill_postorder(Node* n, Stack<Node*>& s) const {
         if (!n) return;
         fill_postorder(n->m_pChild[0], s);
@@ -172,15 +190,17 @@ protected:
         s.push(n);
     }
 
-    // make_view: arma TraversalView desde un Stack ya lleno
-    TraversalView<ForwardIt, BackwardIt> make_view(Stack<Node*> s) const {
-        ptrdiff_t last = (ptrdiff_t)s.size() - 1;
-        ForwardIt  b (s, 0),    e (s, (ptrdiff_t)s.size());
-        BackwardIt rb(s, last), re(s, -1);
-        return { b, e, rb, re };
+    // Construye TraversalView a partir del Stack 
+    View make_view(Stack<Node*> s) const {
+        size_t n = s.size();
+        FwdIt fwdB(s, 0);
+        FwdIt fwdE(s, n);
+        BwdIt bwdB(s, n > 0 ? n - 1 : SIZE_MAX);
+        BwdIt bwdE(s, SIZE_MAX);
+        return View(fwdB, fwdE, bwdB, bwdE);
     }
 
-    // ToString
+    // Helper de serializacion 
     string traversalToString(Stack<Node*>& s) const {
         ostringstream oss;
         oss << "[";
@@ -193,18 +213,20 @@ protected:
     }
 
 public:
-    BinaryTree() : m_pRoot(nullptr) {}
+    BinaryTree() : m_pRoot(nullptr), m_size(0) {}
 
-    // Copy constructor
-    BinaryTree(const BinaryTree& other) : m_pRoot(nullptr) {
+    // Copy constructor 
+    BinaryTree(const BinaryTree& other) : m_pRoot(nullptr), m_size(0) {
         shared_lock<shared_mutex> lock(other.m_mtx);
         m_pRoot = internal_copy(other.m_pRoot);
+        m_size  = other.m_size;
     }
 
     // Move constructor
-    BinaryTree(BinaryTree&& other) : m_pRoot(nullptr) {
+    BinaryTree(BinaryTree&& other) noexcept : m_pRoot(nullptr), m_size(0) {
         unique_lock<shared_mutex> lock(other.m_mtx);
         m_pRoot = exchange(other.m_pRoot, nullptr);
+        m_size  = exchange(other.m_size, 0);
     }
 
     BinaryTree& operator=(const BinaryTree& other) {
@@ -212,15 +234,17 @@ public:
             clear();
             shared_lock<shared_mutex> lock(other.m_mtx);
             m_pRoot = internal_copy(other.m_pRoot);
+            m_size  = other.m_size;
         }
         return *this;
     }
 
-    BinaryTree& operator=(BinaryTree&& other) {
+    BinaryTree& operator=(BinaryTree&& other) noexcept {
         if (this != &other) {
             clear();
             unique_lock<shared_mutex> lock(other.m_mtx);
             m_pRoot = exchange(other.m_pRoot, nullptr);
+            m_size  = exchange(other.m_size, 0);
         }
         return *this;
     }
@@ -232,123 +256,128 @@ public:
         unique_lock<shared_mutex> lock(m_mtx);
         internal_clear(m_pRoot);
         m_pRoot = nullptr;
+        m_size  = 0;
     }
 
     // insert
-    void insert(const value_type& data, Ref ref) {
+    virtual void insert(const value_type& data, Ref ref) {
         unique_lock<shared_mutex> lock(m_mtx);
-        internal_insert(m_pRoot, data, ref);
+        m_pRoot = internal_insert(m_pRoot, data, ref);
+        ++m_size;
     }
 
-    // Mejora libre #1: search devuelve tuple<value_type, Ref>
+    // Mejora libre #1: search devuelve tuple
     tuple<value_type, Ref> search(const value_type& data) const {
         shared_lock<shared_mutex> lock(m_mtx);
-        Node* found = internal_search(m_pRoot, data);
-        if (!found) throw runtime_error("elemento no encontrado");
-        return make_tuple(found->m_data, found->m_ref);
+        Node* hit = internal_search(m_pRoot, data);
+        if (!hit) throw runtime_error("elemento no encontrado");
+        return make_tuple(hit->m_data, hit->m_ref);
+    }
+
+    // Complemento de search
+    bool contains(const value_type& data) const {
+        shared_lock<shared_mutex> lock(m_mtx);
+        return internal_search(m_pRoot, data) != nullptr;
     }
 
     size_t size() const {
         shared_lock<shared_mutex> lock(m_mtx);
-        return internal_size(m_pRoot);
+        return m_size;
     }
 
-    // Forward/Backward iterator inorder
-    InorderView inorder() const {
+    // Mejora libre #2: vistas (TraversalView)
+    View inorder() const {
         shared_lock<shared_mutex> lock(m_mtx);
         Stack<Node*> s;
         fill_inorder(m_pRoot, s);
         return make_view(s);
     }
 
-    // Forward/Backward iterator preorder
-    PreorderView preorder() const {
+    View preorder() const {
         shared_lock<shared_mutex> lock(m_mtx);
         Stack<Node*> s;
         fill_preorder(m_pRoot, s);
         return make_view(s);
     }
 
-    // Forward/Backward iterator postorder
-    PostorderView postorder() const {
+    View postorder() const {
         shared_lock<shared_mutex> lock(m_mtx);
         Stack<Node*> s;
         fill_postorder(m_pRoot, s);
         return make_view(s);
     }
 
-    // Range-based for: usa inorder por defecto
-    ForwardIt begin() const { return inorder().begin(); }
-    ForwardIt end()   const { return inorder().end();   }
 
-    // ToString: muestra los tres recorridos
+    FwdIt begin() const { return inorder().begin(); }
+    FwdIt end()   const { return inorder().end();   }
+
+    // ToString
     string toString() const {
         shared_lock<shared_mutex> lock(m_mtx);
         Stack<Node*> s;
-        string result;
+        string res;
         fill_inorder(m_pRoot, s);
-        result += "Inorder:"   + traversalToString(s) + "\n";
+        res += "Inorder:"   + traversalToString(s) + "\n";
         while (!s.empty()) s.pop();
         fill_preorder(m_pRoot, s);
-        result += "Preorder:"  + traversalToString(s) + "\n";
+        res += "Preorder:"  + traversalToString(s) + "\n";
         while (!s.empty()) s.pop();
         fill_postorder(m_pRoot, s);
-        result += "Postorder:" + traversalToString(s);
-        return result;
+        res += "Postorder:" + traversalToString(s);
+        return res;
     }
 
-    // operator<<: inorder a consola o archivo
-    friend ostream& operator<<(ostream& os, const BinaryTree& tree) {
-        shared_lock<shared_mutex> lock(tree.m_mtx);
+    // operator<< 
+    friend ostream& operator<<(ostream& os, const BinaryTree& arbol) {
+        shared_lock<shared_mutex> lock(arbol.m_mtx);
         Stack<Node*> s;
-        tree.fill_inorder(tree.m_pRoot, s);
-        os << tree.traversalToString(s);
+        arbol.fill_inorder(arbol.m_pRoot, s);
+        os << arbol.traversalToString(s);
         return os;
     }
 
-    // operator>>: parsea [(v,r),...] e invoca insert virtual
-    friend istream& operator>>(istream& is, BinaryTree& tree) {
+    // operator>> 
+    friend istream& operator>>(istream& is, BinaryTree& arbol) {
         char ch;
         if (!(is >> ch) || ch != '[') { is.clear(ios_base::failbit); return is; }
-        value_type val; Ref ref; char comma, paren;
+        value_type val; Ref ref; char coma, parC;
         while (is >> ch && ch != ']')
             if (ch == '(')
-                if (is >> val >> comma >> ref >> paren)
-                    if (comma == ',' && paren == ')')
-                        tree.insert(val, ref);
+                if (is >> val >> coma >> ref >> parC)
+                    if (coma == ',' && parC == ')')
+                        arbol.insert(val, ref);
         return is;
     }
 
-    // printTree: BFS por niveles (usa Vector como cola)
+    // printTree: BFS por niveles
     void printTree(ostream& os = cout) const {
         shared_lock<shared_mutex> lock(m_mtx);
         if (!m_pRoot) { os << "(arbol vacio)" << endl; return; }
-        Vector<Node*> queue(64);
-        size_t front = 0;
-        queue.push_back(m_pRoot, 0);
-        while (front < queue.size()) {
-            size_t level_size = queue.size() - front;
-            bool   all_null   = true;
-            for (size_t i = 0; i < level_size; ++i) {
-                Node* n = queue[front + i];
-                if (n) { all_null = false; break; }
-            }
-            if (all_null) break;
+        Vector<Node*> cola(64);
+        size_t inicioNivel = 0;
+        cola.push_back(m_pRoot, 0);
+        while (inicioNivel < cola.size()) {
+            size_t finNivel = cola.size();
+            bool   todoNulo = true;
+            for (size_t i = inicioNivel; i < finNivel; ++i)
+                if (cola[i]) { todoNulo = false; break; }
+            if (todoNulo) break;
             os << "  ";
-            for (size_t i = 0; i < level_size; ++i) {
-                Node* n = queue[front++];
+            for (size_t i = inicioNivel; i < finNivel; ++i) {
+                Node* n = cola[i];
                 if (n) {
                     os << n->m_data;
-                    queue.push_back(n->m_pChild[0], 0);
-                    queue.push_back(n->m_pChild[1], 0);
+                    cola.push_back(n->m_pChild[0], 0);
+                    cola.push_back(n->m_pChild[1], 0);
                 } else {
                     os << "_";
-                    queue.push_back(nullptr, 0);
-                    queue.push_back(nullptr, 0);
+                    cola.push_back(nullptr, 0);
+                    cola.push_back(nullptr, 0);
                 }
                 os << " ";
             }
             os << endl;
+            inicioNivel = finNivel;
         }
     }
 };
