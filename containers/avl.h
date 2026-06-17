@@ -5,7 +5,6 @@
 #include "BinaryTree.h"
 using namespace std;
 
-// Detector SFINAE: ¿el Node tiene un campo m_value? (caso HashNode).
 template <typename T, typename = void>
 struct has_m_value : std::false_type {};
 
