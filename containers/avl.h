@@ -1,8 +1,17 @@
 #ifndef __AVL_H__
 #define __AVL_H__
 
+#include <type_traits>
 #include "BinaryTree.h"
 using namespace std;
+
+// Detector SFINAE: ¿el Node tiene un campo m_value? (caso HashNode).
+template <typename T, typename = void>
+struct has_m_value : std::false_type {};
+
+template <typename T>
+struct has_m_value<T, std::void_t<decltype(std::declval<T&>().m_value)>>
+    : std::true_type {};
 
 // Extender BinaryTreeNode: AVLNode hereda
 template<typename T>
@@ -71,11 +80,14 @@ protected:
         return rebalancear(pNode);
     }
 
-    // Override internal_copy para preservar m_height de cada nodo
+    // Override internal_copy
     Node* internal_copy(Node* pNode) override {
         if (!pNode) return nullptr;
         Node* clon        = this->make_node(pNode->m_data, pNode->m_ref);
         clon->m_height    = pNode->m_height;
+        if constexpr (has_m_value<Node>::value) {
+            clon->m_value = pNode->m_value;
+        }
         clon->m_pChild[0] = internal_copy(pNode->m_pChild[0]);
         clon->m_pChild[1] = internal_copy(pNode->m_pChild[1]);
         return clon;

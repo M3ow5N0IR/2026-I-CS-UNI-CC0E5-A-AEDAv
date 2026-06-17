@@ -282,6 +282,12 @@ public:
         return make_tuple(hit->m_data, hit->m_ref);
     }
 
+    // find
+    Node* find(const value_type& data) const {
+        shared_lock<shared_mutex> lock(m_mtx);
+        return internal_search(m_pRoot, data);
+    }
+
     // Complemento de search
     bool contains(const value_type& data) const {
         shared_lock<shared_mutex> lock(m_mtx);

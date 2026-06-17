@@ -1,1 +1,1 @@
-{3:Tres,10:Diez Modificado,25:Veinticinco}
+{[][][][(3,0),(10,0)][(25,0)][][]}

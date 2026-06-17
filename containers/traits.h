@@ -32,4 +32,11 @@ struct MinHeapTrait : public BaseTrait<VectorNode<T>, less<T>> {};
 template <typename T>
 struct MaxHeapTrait : public BaseTrait<VectorNode<T>, greater<T>> {};
 
+// HashTrait: define el par (Key, Value) que va dentro de cada nodo de la HashTable
+template <typename _Key, typename _Value>
+struct HashTrait {
+    using Key   = _Key;
+    using Value = _Value;
+};
+
 #endif // __TRAITS_H__

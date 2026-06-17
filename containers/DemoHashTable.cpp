@@ -1,7 +1,5 @@
 #include <iostream>
 #include <fstream>
-#include <sstream>
-#include <string>
 #include "../types.h"
 #include "hashtable.h"
 using namespace std;
@@ -9,14 +7,14 @@ using namespace std;
 void DemoHashTable() {
     cout << "\n=== PRUEBAS HASHTABLE ===" << endl;
 
-    HashTable<long, string> m(7); // 7 buckets pequenos para forzar colisiones
+    HashTable<HashTrait<Param1, Param2>> m(7); // 7 buckets pequenos para forzar colisiones
 
     // operator[] (set y get)
     cout << "\n operator[] (set):" << endl;
     m[10] = "Diez";
     m[25] = "Veinticinco";
     m[3]  = "Tres";
-    m[10] = "Diez Modificado"; // actualiza (con espacios: parser char-a-char lo soporta)
+    m[10] = "Diez Modificado"; 
     cout << "  m[10] = " << m[10] << endl;
     cout << "  m[3]  = " << m[3]  << endl;
     cout << "  size  = " << m.size() << endl;
@@ -33,13 +31,13 @@ void DemoHashTable() {
 
     // operator>> (lee archivo)
     cout << "\n operator>> (lee hashtable.txt en m2):" << endl;
-    HashTable<long, string> m2(7);
+    HashTable<HashTrait<Param1, Param2>> m2(7);
     { ifstream is("hashtable.txt"); is >> m2; }
     cout << "  m2 = " << m2 << endl;
 
     // Constructor copia
     cout << "\n Constructor copia (independiente):" << endl;
-    HashTable<long, string> copia(m);
+    HashTable<HashTrait<Param1, Param2>> copia(m);
     copia[99] = "Nueve nueve";
     cout << "  original size = " << m.size() << " | copia size = " << copia.size() << endl;
     cout << "  original tiene 99? " << (m.contains(99) ? "si" : "no") << endl;
@@ -47,7 +45,7 @@ void DemoHashTable() {
 
     // Move constructor
     cout << "\n Move constructor:" << endl;
-    HashTable<long, string> movido(std::move(copia));
+    HashTable<HashTrait<Param1, Param2>> movido(std::move(copia));
     cout << "  movido size  = " << movido.size() << endl;
     cout << "  copia vacia? " << (copia.size() == 0 ? "si" : "no") << endl;
 
@@ -58,7 +56,7 @@ void DemoHashTable() {
 
     // Muchas inserciones para verificar buckets
     cout << "\n Inserciones masivas con colisiones forzadas (capacity=7):" << endl;
-    HashTable<long, long> mn(7);
+    HashTable<HashTrait<Param1, Param1>> mn(7);
     for (long i = 0; i < 30; ++i) mn.insert(i, i * 100);
     cout << "  size esperado 30 -> " << mn.size() << endl;
     cout << "  mn.search(15) = " << mn.search(15) << endl;

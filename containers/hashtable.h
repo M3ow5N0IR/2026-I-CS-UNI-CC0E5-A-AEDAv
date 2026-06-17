@@ -16,63 +16,70 @@ struct HashNode : BinaryTreeNode<Key, HashNode<Key, Value>> {
     Height m_height;
     Value  m_value;
 
-    HashNode(Key key, Value value, Ref ref)
+    HashNode(Key key, Ref ref)
         : BinaryTreeNode<Key, HashNode<Key, Value>>(key, ref),
-          m_height(1), m_value(value) {}
+          m_height(1), m_value(Value{}) {}
 };
 
-template<typename Key, typename Value>
-class HashBucket : public AVLTree<AscendingTrait<HashNode<Key, Value>>> {
+// HashBucket
+template<typename Trait>
+class HashBucket {
 public:
-    using Base = AVLTree<AscendingTrait<HashNode<Key, Value>>>;
-    using Node = HashNode<Key, Value>;
-    using Base::Base;
+    using Key   = typename Trait::Key;
+    using Value = typename Trait::Value;
+    using Node  = HashNode<Key, Value>;
+    using AVL   = AVLTree<AscendingTrait<Node>>;
 
+private:
+    AVL m_avl;
+
+public:
+    HashBucket() = default;
+
+    HashBucket(const HashBucket& other) : m_avl(other.m_avl) {}
+    HashBucket(HashBucket&& other) noexcept : m_avl(std::move(other.m_avl)) {}
+
+    HashBucket& operator=(const HashBucket& other) {
+        m_avl = other.m_avl;
+        return *this;
+    }
+    HashBucket& operator=(HashBucket&& other) noexcept {
+        m_avl = std::move(other.m_avl);
+        return *this;
+    }
+
+    // findNode
     Node* findNode(const Key& key) const {
-        return static_cast<Node*>(this->internal_search(this->m_pRoot, key));
+        return m_avl.find(key);
     }
 
-    Node* findNodeLocked(const Key& key) const {
-        shared_lock<shared_mutex> lock(this->m_mtx);
-        return findNode(key);
-    }
-
+    // insertOrUpdate
     bool insertOrUpdate(const Key& key, const Value& value, Ref ref = 0) {
-        unique_lock<shared_mutex> lock(this->m_mtx);
-        Node* found = findNode(key);
+        Node* found = m_avl.find(key);
         if (found) {
             found->m_value = value;
             return false;
         }
-        this->m_pRoot = this->internal_insert(this->m_pRoot, key, ref);
-        ++this->m_size;
-        Node* nuevo = findNode(key);
+        m_avl.insert(key, ref);
+        Node* nuevo = m_avl.find(key);
         if (nuevo) nuevo->m_value = value;
         return true;
     }
 
-protected:
-    Node* make_node(const Key& data, Ref ref) override {
-        return new Node(data, Value{}, ref);
-    }
+    size_t size()    const { return m_avl.size(); }
+    bool   isEmpty() const { return m_avl.size() == 0; }
 
-    Node* internal_copy(Node* pNode) override {
-        if (!pNode) return nullptr;
-        auto* clon        = new Node(pNode->m_data, pNode->m_value, pNode->m_ref);
-        clon->m_height    = pNode->m_height;
-        clon->m_pChild[0] = static_cast<Node*>(internal_copy(pNode->m_pChild[0]));
-        clon->m_pChild[1] = static_cast<Node*>(internal_copy(pNode->m_pChild[1]));
-        return clon;
-    }
+    // Iteracion
+    auto inorder() const { return m_avl.inorder(); }
+    auto begin()   const { return m_avl.begin(); }
+    auto end()     const { return m_avl.end(); }
 
-public:
-    template<typename Func>
-    void forEachKV(Func func) const {
-        shared_lock<shared_mutex> lock(this->m_mtx);
-        for (auto it = this->inorder().begin(); it != this->inorder().end(); ++it) {
-            Node* n = static_cast<Node*>(it.getNode());
-            func(n->m_data, n->m_value);
-        }
+    // reutiliza operator<< y operator>> del AVL
+    friend ostream& operator<<(ostream& os, const HashBucket& b) {
+        return os << b.m_avl;
+    }
+    friend istream& operator>>(istream& is, HashBucket& b) {
+        return is >> b.m_avl;
     }
 };
 
@@ -105,14 +112,14 @@ decltype(auto) get(const KVPair<Key, Value>& p) {
     else                  return p.value;
 }
 
-template<typename Key, typename Value>
+template<typename Trait>
 class HashTable {
 public:
-    using Node        = HashNode<Key, Value>;
-    using Bucket      = HashBucket<Key, Value>;
-    using MySelf      = HashTable<Key, Value>;
-    using key_type    = Key;
-    using mapped_type = Value;
+    using Key    = typename Trait::Key;
+    using Value  = typename Trait::Value;
+    using Node   = HashNode<Key, Value>;
+    using Bucket = HashBucket<Trait>;
+    using MySelf = HashTable<Trait>;
 
 private:
     static constexpr size_t kDefaultCapacity = 17;
@@ -132,8 +139,8 @@ public:
         HashTable *m_table;
         size_t     m_bucket;
         Node      *m_node;
-        typename Bucket::FwdIt m_it;
-        typename Bucket::FwdIt m_end;
+        typename Bucket::AVL::FwdIt m_it;
+        typename Bucket::AVL::FwdIt m_end;
 
         Iterator(HashTable* t, size_t b)
             : m_table(t), m_bucket(b),
@@ -274,44 +281,38 @@ public:
         ostringstream oss;
         oss << "{";
         bool first = true;
-        for (size_t i = 0; i < m_capacity; ++i)
-            m_buckets[i].forEachKV([&](const Key& k, Value& v) {
+        for (size_t i = 0; i < m_capacity; ++i) {
+            for (auto it = m_buckets[i].inorder().begin();
+                 it != m_buckets[i].inorder().end(); ++it) {
+                Node* n = static_cast<Node*>(it.getNode());
                 if (!first) oss << ",";
-                oss << k << ":" << v;
+                oss << n->m_data << ":" << n->m_value;
                 first = false;
-            });
+            }
+        }
         oss << "}";
         return oss.str();
     }
 
     // operator<<
     friend ostream& operator<<(ostream& os, const HashTable& t) {
-        return os << t.toString();
+        shared_lock<shared_mutex> lock(t.m_mtx);
+        os << "{";
+        for (size_t i = 0; i < t.m_capacity; ++i)
+            os << t.m_buckets[i];
+        os << "}";
+        return os;
     }
 
     // operator>>
     friend istream& operator>>(istream& is, HashTable& t) {
         Char ch;
         if (!(is >> ch) || ch != '{') { is.clear(ios_base::failbit); return is; }
-        while (is >> ch && ch != '}') {
-            if (ch == ',') continue;
-            is.putback(ch);
-            Key key;
-            if (!(is >> key)) break;
-            is >> ch;
-            if (ch != ':') break;
-            string buffer;
-            while (is.get(ch) && ch != ',' && ch != '}') buffer += ch;
-            if (ch == ',' || ch == '}') is.putback(ch);
-            Value val;
-            if constexpr (std::is_same_v<Value, string>) {
-                val = buffer;
-            } else {
-                istringstream ss(buffer);
-                ss >> val;
-            }
-            t.insert(key, val);
+        for (size_t i = 0; i < t.m_capacity; ++i) {
+            is >> t.m_buckets[i];
+            t.m_size += t.m_buckets[i].size();
         }
+        is >> ch; // consume '}'
         return is;
     }
 };
