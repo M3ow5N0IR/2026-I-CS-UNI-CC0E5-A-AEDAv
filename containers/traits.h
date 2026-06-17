@@ -32,11 +32,19 @@ struct MinHeapTrait : public BaseTrait<VectorNode<T>, less<T>> {};
 template <typename T>
 struct MaxHeapTrait : public BaseTrait<VectorNode<T>, greater<T>> {};
 
-// HashTrait: define el par (Key, Value) que va dentro de cada nodo de la HashTable
-template <typename _Key, typename _Value>
+// Forward declarations para HashTrait
+template <typename _Key, typename _Value, typename _Compare> struct KVPair;
+template <typename _T>                                       struct AVLNode;
+template <typename _Trait>                                   class  AVLTree;
+
+// HashTrait
+template <typename _Key, typename _Value, typename _Compare = less<_Key>>
 struct HashTrait {
-    using Key   = _Key;
-    using Value = _Value;
+    using Key       = _Key;
+    using Value     = _Value;
+    using Compare   = _Compare;
+    using Entry     = KVPair<_Key, _Value, _Compare>;
+    using Container = AVLTree<AscendingTrait<AVLNode<Entry>>>;
 };
 
 #endif // __TRAITS_H__

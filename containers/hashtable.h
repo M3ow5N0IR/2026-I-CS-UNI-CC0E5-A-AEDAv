@@ -6,314 +6,156 @@
 #include <stdexcept>
 #include <functional>
 #include <shared_mutex>
+#include <type_traits>
 #include <utility>
 #include "avl.h"
 #include "../types.h"
 using namespace std;
 
-template<typename Key, typename Value>
-struct HashNode : BinaryTreeNode<Key, HashNode<Key, Value>> {
-    Height m_height;
-    Value  m_value;
-
-    HashNode(Key key, Ref ref)
-        : BinaryTreeNode<Key, HashNode<Key, Value>>(key, ref),
-          m_height(1), m_value(Value{}) {}
-};
-
-// HashBucket
-template<typename Trait>
-class HashBucket {
-public:
-    using Key   = typename Trait::Key;
-    using Value = typename Trait::Value;
-    using Node  = HashNode<Key, Value>;
-    using AVL   = AVLTree<AscendingTrait<Node>>;
-
-private:
-    AVL m_avl;
-
-public:
-    HashBucket() = default;
-
-    HashBucket(const HashBucket& other) : m_avl(other.m_avl) {}
-    HashBucket(HashBucket&& other) noexcept : m_avl(std::move(other.m_avl)) {}
-
-    HashBucket& operator=(const HashBucket& other) {
-        m_avl = other.m_avl;
-        return *this;
-    }
-    HashBucket& operator=(HashBucket&& other) noexcept {
-        m_avl = std::move(other.m_avl);
-        return *this;
-    }
-
-    // findNode
-    Node* findNode(const Key& key) const {
-        return m_avl.find(key);
-    }
-
-    // insertOrUpdate
-    bool insertOrUpdate(const Key& key, const Value& value, Ref ref = 0) {
-        Node* found = m_avl.find(key);
-        if (found) {
-            found->m_value = value;
-            return false;
-        }
-        m_avl.insert(key, ref);
-        Node* nuevo = m_avl.find(key);
-        if (nuevo) nuevo->m_value = value;
-        return true;
-    }
-
-    size_t size()    const { return m_avl.size(); }
-    bool   isEmpty() const { return m_avl.size() == 0; }
-
-    // Iteracion
-    auto inorder() const { return m_avl.inorder(); }
-    auto begin()   const { return m_avl.begin(); }
-    auto end()     const { return m_avl.end(); }
-
-    // reutiliza operator<< y operator>> del AVL
-    friend ostream& operator<<(ostream& os, const HashBucket& b) {
-        return os << b.m_avl;
-    }
-    friend istream& operator>>(istream& is, HashBucket& b) {
-        return is >> b.m_avl;
-    }
-};
-
-template<typename Key, typename Value>
+// KVPair
+template <typename Key, typename Value, typename Compare = less<Key>>
 struct KVPair {
-    const Key& key;
-    Value&     value;
+    using value_type = KVPair;
+
+    Key           m_key;
+    mutable Value m_value;
+
+    KVPair() : m_key(), m_value() {}
+    KVPair(const Key& key, const Value& value = Value{}) : m_key(key), m_value(value) {}
+
+    bool operator< (const KVPair& other) const { return Compare{}(m_key, other.m_key); }
+    bool operator> (const KVPair& other) const { return Compare{}(other.m_key, m_key); }
+    bool operator==(const KVPair& other) const { return !(*this < other) && !(other < *this); }
+
+    friend ostream& operator<<(ostream& os, const KVPair& kv) {
+        return os << kv.m_key << "=>" << kv.m_value;
+    }
+
+    friend istream& operator>>(istream& is, KVPair& kv) {
+        Char sep;
+        if (!(is >> kv.m_key >> sep) || sep != '=') {
+            is.clear(ios_base::failbit);
+            return is;
+        }
+        Char arrow;
+        if (!is.get(arrow) || arrow != '>') {
+            is.clear(ios_base::failbit);
+            return is;
+        }
+        string buffer;
+        Char c;
+        while (is.get(c) && c != ',' && c != ')') buffer += c;
+        if (c == ',' || c == ')') is.putback(c);
+        if constexpr (is_same_v<Value, string>) {
+            kv.m_value = buffer;
+        } else {
+            istringstream parser(buffer);
+            parser >> kv.m_value;
+        }
+        return is;
+    }
 };
 
-namespace std {
-    template<typename Key, typename Value>
-    struct tuple_size<KVPair<Key, Value>> : integral_constant<size_t, 2> {};
-
-    template<typename Key, typename Value>
-    struct tuple_element<0, KVPair<Key, Value>> { using type = const Key; };
-
-    template<typename Key, typename Value>
-    struct tuple_element<1, KVPair<Key, Value>> { using type = Value; };
-}
-
-template<size_t I, typename Key, typename Value>
-decltype(auto) get(KVPair<Key, Value>& p) {
-    if constexpr (I == 0) return p.key;
-    else                  return p.value;
-}
-
-template<size_t I, typename Key, typename Value>
-decltype(auto) get(const KVPair<Key, Value>& p) {
-    if constexpr (I == 0) return p.key;
-    else                  return p.value;
-}
-
-template<typename Trait>
+// HashTable
+template <typename Trait>
 class HashTable {
 public:
-    using Key    = typename Trait::Key;
-    using Value  = typename Trait::Value;
-    using Node   = HashNode<Key, Value>;
-    using Bucket = HashBucket<Trait>;
-    using MySelf = HashTable<Trait>;
+    using Key       = typename Trait::Key;
+    using Value     = typename Trait::Value;
+    using Compare   = typename Trait::Compare;
+    using Entry     = typename Trait::Entry;
+    using Container = typename Trait::Container;
+    using Node      = typename Container::Node;
 
 private:
-    static constexpr size_t kDefaultCapacity = 17;
-
-    Bucket              *m_buckets;
-    size_t               m_capacity;
-    size_t               m_size;
+    Container            m_container;
     mutable shared_mutex m_mtx;
 
-    size_t bucket_index(const Key& key) const {
-        return std::hash<Key>{}(key) % m_capacity;
-    }
-
 public:
-    // for (const auto& [key, value] : m)
-    struct Iterator {
-        HashTable *m_table;
-        size_t     m_bucket;
-        Node      *m_node;
-        typename Bucket::AVL::FwdIt m_it;
-        typename Bucket::AVL::FwdIt m_end;
-
-        Iterator(HashTable* t, size_t b)
-            : m_table(t), m_bucket(b),
-              m_node(nullptr),
-              m_it(Stack<Node*>(), 0),
-              m_end(Stack<Node*>(), 0) {
-            advanceToNonEmpty();
-        }
-
-        void advanceToNonEmpty() {
-            while (m_bucket < m_table->m_capacity) {
-                auto view = m_table->m_buckets[m_bucket].inorder();
-                m_it  = view.begin();
-                m_end = view.end();
-                if (m_it != m_end) {
-                    m_node = static_cast<Node*>(m_it.getNode());
-                    return;
-                }
-                ++m_bucket;
-            }
-            m_node = nullptr;
-        }
-
-        KVPair<Key, Value> operator*() const {
-            return { m_node->m_data, m_node->m_value };
-        }
-
-        Iterator& operator++() {
-            ++m_it;
-            if (m_it != m_end) {
-                m_node = static_cast<Node*>(m_it.getNode());
-            } else {
-                ++m_bucket;
-                advanceToNonEmpty();
-            }
-            return *this;
-        }
-
-        bool operator==(const Iterator& o) const {
-            return m_bucket == o.m_bucket && m_node == o.m_node;
-        }
-        bool operator!=(const Iterator& o) const { return !(*this == o); }
-    };
-
-    Iterator begin() { return Iterator(this, 0); }
-    Iterator end()   {
-        Iterator it(this, m_capacity);
-        it.m_node = nullptr;
-        return it;
-    }
-
-    HashTable(size_t capacity = kDefaultCapacity)
-        : m_buckets(new Bucket[capacity]), m_capacity(capacity), m_size(0) {}
-
-    // Constructor copia
-    HashTable(const HashTable& other)
-        : m_buckets(nullptr), m_capacity(0), m_size(0) {
+    HashTable()  = default;
+    ~HashTable() = default;
+    // Copy Constructor
+    HashTable(const HashTable& other) {
         shared_lock<shared_mutex> lock(other.m_mtx);
-        m_capacity = other.m_capacity;
-        m_size     = other.m_size;
-        m_buckets  = new Bucket[m_capacity];
-        for (size_t i = 0; i < m_capacity; ++i)
-            m_buckets[i] = other.m_buckets[i];
+        m_container = other.m_container;
     }
 
-    // Move constructor
-    HashTable(HashTable&& other) noexcept
-        : m_buckets(nullptr), m_capacity(0), m_size(0) {
+    HashTable(HashTable&& other) noexcept {
         unique_lock<shared_mutex> lock(other.m_mtx);
-        m_buckets  = exchange(other.m_buckets,  nullptr);
-        m_capacity = exchange(other.m_capacity, 0);
-        m_size     = exchange(other.m_size,     0);
+        m_container = std::move(other.m_container);
     }
 
     HashTable& operator=(const HashTable& other) {
         if (this != &other) {
-            unique_lock<shared_mutex> lock(m_mtx);
-            shared_lock<shared_mutex> olock(other.m_mtx);
-            delete[] m_buckets;
-            m_capacity = other.m_capacity;
-            m_size     = other.m_size;
-            m_buckets  = new Bucket[m_capacity];
-            for (size_t i = 0; i < m_capacity; ++i)
-                m_buckets[i] = other.m_buckets[i];
+            unique_lock<shared_mutex> lockSelf(m_mtx);
+            shared_lock<shared_mutex> lockOther(other.m_mtx);
+            m_container = other.m_container;
         }
         return *this;
     }
 
     HashTable& operator=(HashTable&& other) noexcept {
         if (this != &other) {
-            unique_lock<shared_mutex> lock(m_mtx);
-            unique_lock<shared_mutex> olock(other.m_mtx);
-            delete[] m_buckets;
-            m_buckets  = exchange(other.m_buckets,  nullptr);
-            m_capacity = exchange(other.m_capacity, 0);
-            m_size     = exchange(other.m_size,     0);
+            unique_lock<shared_mutex> lockSelf(m_mtx);
+            unique_lock<shared_mutex> lockOther(other.m_mtx);
+            m_container = std::move(other.m_container);
         }
         return *this;
-    }
-
-    virtual ~HashTable() { delete[] m_buckets; }
-
-    void insert(const Key& key, const Value& value, Ref ref = 0) {
-        unique_lock<shared_mutex> lock(m_mtx);
-        size_t idx = bucket_index(key);
-        bool nuevo = m_buckets[idx].insertOrUpdate(key, value, ref);
-        if (nuevo) ++m_size;
     }
 
     // m[5] = 3 (sobrecarga de operator[])
     Value& operator[](const Key& key) {
         unique_lock<shared_mutex> lock(m_mtx);
-        size_t idx  = bucket_index(key);
-        Node*  node = m_buckets[idx].findNode(key);
-        if (node) return node->m_value;
-        m_buckets[idx].insertOrUpdate(key, Value{});
-        ++m_size;
-        return m_buckets[idx].findNode(key)->m_value;
+        if (Node* hit = m_container.find(Entry(key)))
+            return hit->m_data.m_value;
+        m_container.insert(Entry(key), Ref{});
+        return m_container.find(Entry(key))->m_data.m_value;
     }
 
-    Value search(const Key& key) const {
+    // at: solo lectura
+    const Value& at(const Key& key) const {
         shared_lock<shared_mutex> lock(m_mtx);
-        Node* hit = m_buckets[bucket_index(key)].findNode(key);
-        if (!hit) throw runtime_error("key no encontrada");
-        return hit->m_value;
+        Node* hit = m_container.find(Entry(key));
+        if (!hit) throw out_of_range("HashTable::at: la key no existe");
+        return hit->m_data.m_value;
     }
 
     bool contains(const Key& key) const {
         shared_lock<shared_mutex> lock(m_mtx);
-        return m_buckets[bucket_index(key)].findNode(key) != nullptr;
+        return m_container.find(Entry(key)) != nullptr;
     }
 
-    size_t size()    const { shared_lock<shared_mutex> lock(m_mtx); return m_size; }
-    bool   isEmpty() const { shared_lock<shared_mutex> lock(m_mtx); return m_size == 0; }
+    size_t size()    const { return m_container.size(); }
+    bool   isEmpty() const { return m_container.size() == 0; }
 
-    string toString() const {
-        shared_lock<shared_mutex> lock(m_mtx);
-        ostringstream oss;
-        oss << "{";
-        bool first = true;
-        for (size_t i = 0; i < m_capacity; ++i) {
-            for (auto it = m_buckets[i].inorder().begin();
-                 it != m_buckets[i].inorder().end(); ++it) {
-                Node* n = static_cast<Node*>(it.getNode());
-                if (!first) oss << ",";
-                oss << n->m_data << ":" << n->m_value;
-                first = false;
-            }
-        }
-        oss << "}";
-        return oss.str();
-    }
+    // for (const auto& [key, value] : m)
+    auto begin()       { return m_container.begin(); }
+    auto end()         { return m_container.end();   }
+    auto begin() const { return m_container.begin(); }
+    auto end()   const { return m_container.end();   }
 
     // operator<<
     friend ostream& operator<<(ostream& os, const HashTable& t) {
-        shared_lock<shared_mutex> lock(t.m_mtx);
-        os << "{";
-        for (size_t i = 0; i < t.m_capacity; ++i)
-            os << t.m_buckets[i];
-        os << "}";
-        return os;
+        return os << t.m_container;
     }
 
     // operator>>
     friend istream& operator>>(istream& is, HashTable& t) {
-        Char ch;
-        if (!(is >> ch) || ch != '{') { is.clear(ios_base::failbit); return is; }
-        for (size_t i = 0; i < t.m_capacity; ++i) {
-            is >> t.m_buckets[i];
-            t.m_size += t.m_buckets[i].size();
-        }
-        is >> ch; // consume '}'
-        return is;
+        return is >> t.m_container;
+    }
+
+    // toString
+    string toString() const {
+        ostringstream oss;
+        oss << "{ ";
+        bool inicio = true;
+        m_container.inorder().forEach([&](const Entry& e) {
+            if (!inicio) oss << " | ";
+            oss << e;
+            inicio = false;
+        });
+        oss << " }";
+        return oss.str();
     }
 };
 
