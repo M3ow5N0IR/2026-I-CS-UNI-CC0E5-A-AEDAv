@@ -74,7 +74,7 @@ protected:
        bool m_Unique;
        bool m_isRoot;
        vector<ObjectInfo> m_Keys;
-       vector<BTPage *>m_SubPages;
+       vector<BTPage *>   m_SubPages;
        int  m_KeyCount;
        void  Create();
        void  Reset ();
@@ -123,6 +123,8 @@ private:
        void MovePage(BTPage *  pChildPage,vector<ObjectInfo> & tmpKeys,vector<BTPage *> & tmpSubPages);
 };
 
+// Si no lo encuentra, deberia decirme:
+// cual es la posicion donde deberia estar
 template <typename Container, typename ObjType>
 int binary_search(Container& container, int first, int last, ObjType &object)
 {
@@ -187,7 +189,7 @@ bt_ErrorCode CBTreePage<keyType, ObjIDType>::Insert(const keyType& key, const Ob
        if( !m_SubPages[pos] ) // this is a leave
        {
                ::insert_at(m_Keys, ObjectInfo(key, ObjID), pos);
-               m_KeyCount++;
+               NumberOfKeys()++;
                if( Overflow() )
                        return bt_overflow;
                return bt_ok;
@@ -205,6 +207,9 @@ bt_ErrorCode CBTreePage<keyType, ObjIDType>::Insert(const keyType& key, const Ob
                        return bt_ok;
                }
        }
+
+       // Nunca va a entrar a este If porque esta situacion
+       // debe haber sido tratada en el if anterior
        if( Overflow() ) // node overflow
                return bt_overflow;
        return bt_ok;
@@ -214,9 +219,9 @@ template <typename keyType, typename ObjIDType>
 bool CBTreePage<keyType, ObjIDType>::Redistribute1(int &pos)
 {
        if( m_SubPages[pos]->Underflow() )
-       {
+       {       // nkol = Number of keys on left brother, nkor = Number of keys on right brother
                int nkol = 0,
-                       nkor = 0;
+                   nkor = 0;
                // is this the first element or there are more elements on right brother
                if( pos > 0 )
                        nkol = m_SubPages[pos-1]->NumberOfKeys();
@@ -243,7 +248,7 @@ bool CBTreePage<keyType, ObjIDType>::Redistribute1(int &pos)
        else // it is due to overflow
        {
                int fcol = GetFreeCellsOnLeft(pos),   // Free Cells On Left
-               fcor = GetFreeCellsOnRight(pos);  // Free Cells On Right
+                   fcor = GetFreeCellsOnRight(pos);  // Free Cells On Right
 
                if( !fcol && !fcor && m_SubPages[pos]->IsFull() )
                        return false;
@@ -300,7 +305,7 @@ void CBTreePage<keyType, ObjIDType>::RedistributeR2L(int pos)
                        *pTarget = m_SubPages[pos-1];
 
        while(pSource->GetNumberOfKeys() > pSource->MinNumberOfKeys() &&
-                 pTarget->GetNumberOfKeys() < pSource->GetNumberOfKeys() )
+             pTarget->GetNumberOfKeys() < pSource->GetNumberOfKeys() )
        {
                // Move from this page to the down-left page \/
                ::insert_at(pTarget->m_Keys, m_Keys[pos-1], pTarget->NumberOfKeys()++);
@@ -367,6 +372,7 @@ void CBTreePage<keyType, ObjIDType>::SplitChild(int pos)
        vector<BTPage *>   tmpSubPages;
        //tmpKeys.resize(nKeys+1);
 
+       // Prepara el vectpor unificado de las 2 paginas a ser divididas en 3
        // copy from left child
        MovePage(pChild1, tmpKeys, tmpSubPages);
        // copy a key from parent
@@ -638,9 +644,9 @@ template <typename keyType, typename ObjIDType>
 bt_ErrorCode CBTreePage<keyType, ObjIDType>::Merge(int pos)
 {
        assert( m_SubPages[pos-1]->NumberOfKeys() +
-                       m_SubPages[ pos ]->NumberOfKeys() +
-                       m_SubPages[pos+1]->NumberOfKeys() ==
-                       3*m_SubPages[ pos ]->MinNumberOfKeys() - 1);
+                m_SubPages[ pos ]->NumberOfKeys() +
+                m_SubPages[pos+1]->NumberOfKeys() ==
+                3*m_SubPages[ pos ]->MinNumberOfKeys() - 1);
 
        // FIRST: Put all the elements into a vector
        vector<ObjectInfo> tmpKeys;
@@ -740,6 +746,7 @@ CBTreePage<keyType, ObjIDType>::GetFirstObjectInfo()
        return m_Keys[0];
 }
 
+// Deben eliminarlo e imprimir con un ForEach
 template <typename keyType, typename ObjIDType>
 void Print(tagObjectInfo<keyType, ObjIDType> &info, int level, void *pExtra)
 {

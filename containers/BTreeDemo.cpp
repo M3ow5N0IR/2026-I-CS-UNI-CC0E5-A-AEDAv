@@ -10,7 +10,8 @@ const char * keys2 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv
 const char * keys3 = "DYZakHIUwxVJ203ejOP9Qc8AdtuEop1XvTRghSNbW567BfiCqrs4FGMyzKLlmn";
 
 const int BTreeSize = 3;
-void(int argc, char * argv[])set{
+void main(int argc, char * argv[], char * envp[])
+{
        int result, i;
        BTree <char> bt (BTreeSize);
        for (i = 0; keys1[i]; i++)
