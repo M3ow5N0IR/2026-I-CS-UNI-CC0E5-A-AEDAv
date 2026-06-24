@@ -149,6 +149,14 @@ public:
         return m_data[index].getDataRef();
     }
 
+    // nodeAt: acceso al nodo completo (data + ref) por indice.
+    // operator[] solo expone el data; esto permite leer/escribir tambien el ref.
+    Node& nodeAt(size_t index) {
+        shared_lock<shared_mutex> lock(m_mtx);
+        if (index >= m_size) throw out_of_range("indice fuera de rango");
+        return m_data[index];
+    }
+
     virtual size_t size() const {
         shared_lock<shared_mutex> lock(m_mtx);
         return m_size;

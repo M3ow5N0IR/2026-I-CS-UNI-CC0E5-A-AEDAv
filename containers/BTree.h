@@ -1,149 +1,96 @@
-// btree.h
+// BTree.h
 
 #ifndef BTREE_H
 #define BTREE_H
 
 #include <iostream>
+#include <sstream>
+#include <string>
+#include <stdexcept>
+#include <tuple>
+#include <mutex>
+#include <shared_mutex>
+#include <utility>
+#include "../types.h"
 #include "BTreePage.h"
+#include "traits.h"
+using namespace std;
 
 #define DEFAULT_BTREE_ORDER 3
 
-template <typename keyType, typename ObjIDType = long>
-class BTree 
-// this is the full version of the BTree
-{
-       typedef CBTreePage <keyType, ObjIDType> BTNode;// useful shorthand
-       /*struct ObjectInfo
-       {
-               keyType first;
-               long    second;
-               ObjectInfo *&operator->() { return this; }
-       };*/
+// BTree<Trait>
+template <typename Trait>
+class BTree {
+public:
+       using value_type = typename Trait::value_type;
+       using Comp       = typename Trait::Comp;
+       using Page       = BTreePage<Trait>;
+       using KeyNode    = typename Page::KeyNode;
+       using MySelf     = BTree<Trait>;
+
+private:
+       Page   m_root;
+       size_t m_order;
+       size_t m_height;
+       size_t m_numKeys;
+       mutable shared_mutex m_mtx;
 
 public:
-       //typedef ObjectInfo iterator;
-       typedef typename BTNode::lpfnForEach2    lpfnForEach2;
-       typedef typename BTNode::lpfnForEach3    lpfnForEach3;
-       typedef typename BTNode::lpfnFirstThat2  lpfnFirstThat2;
-       typedef typename BTNode::lpfnFirstThat3  lpfnFirstThat3;
-       typedef typename BTNode::ObjectInfo      ObjectInfo;
+       BTree(size_t order = DEFAULT_BTREE_ORDER)
+               : m_root(true, order), m_order(order), m_height(1), m_numKeys(0) {}
 
-public:
-       BTree(int order = DEFAULT_BTREE_ORDER, bool unique = true);
-       ~BTree();
-       //int           Open (char * name, int mode);
-       //int           Create (char * name, int mode);
-       //int           Close ();
-       bool            Insert (const keyType key, const int ObjID);
-       bool            Remove (const keyType key, const int ObjID);
-       ObjIDType       Search (const keyType key);
-       long            size()  { return m_NumKeys; }
-       long            height() { return m_Height;      }
-       long            GetOrder() { return m_Order;     }
+       BTree(const BTree&)            = delete;
+       BTree& operator=(const BTree&) = delete;
 
-       void            Print (ostream &os);
-       void            ForEach( lpfnForEach2 lpfn, void *pExtra1 );
-       void            ForEach( lpfnForEach3 lpfn, void *pExtra1, void *pExtra2);
-       ObjectInfo*     FirstThat( lpfnFirstThat2 lpfn, void *pExtra1 );
-       ObjectInfo*     FirstThat( lpfnFirstThat3 lpfn, void *pExtra1, void *pExtra2);
-       //typedef               ObjectInfo iterator;
+       ~BTree() {
+               unique_lock<shared_mutex> lock(m_mtx);
+               m_root.clear();
+       }
 
-protected:
-       BTNode          m_Root;
-       int             m_Height;  // height of tree
-       int             m_Order;   // order of tree
-       long            m_NumKeys; // number of keys
-       bool            m_Unique;  // Accept the elements only once ?
+       // insert
+       void insert(const value_type& key, Ref ref) {
+               unique_lock<shared_mutex> lock(m_mtx);
+               if( m_root.isFull() ) { m_root.splitRoot(); ++m_height; }
+               m_root.insertNonFull(key, ref);
+               ++m_numKeys;
+       }
+
+       // search
+       tuple<value_type, Ref> search(const value_type& key) {
+               shared_lock<shared_mutex> lock(m_mtx);
+               return m_root.search(key);
+       }
+
+       // ForEach variadic
+       template <typename Func, typename... Args>
+       void ForEach(Func func, Args&&... args) {
+               shared_lock<shared_mutex> lock(m_mtx);
+               m_root.forEach(func, forward<Args>(args)...);
+       }
+
+       // FirstThat variadic
+       template <typename Pred, typename... Args>
+       tuple<value_type, Ref> FirstThat(Pred pred, Args&&... args) {
+               shared_lock<shared_mutex> lock(m_mtx);
+               KeyNode* p = m_root.firstThat(pred, forward<Args>(args)...);
+               if( !p ) throw runtime_error("BTree::FirstThat: ninguna clave cumple");
+               return { p->getData(), p->getRef() };
+       }
+
+       string toString() {
+               shared_lock<shared_mutex> lock(m_mtx);
+               ostringstream oss;
+               m_root.appendToString(oss, 0);
+               return oss.str();
+       }
+
+       size_t height() const { shared_lock<shared_mutex> lock(m_mtx); return m_height;  }
+       size_t size()   const { shared_lock<shared_mutex> lock(m_mtx); return m_numKeys; }
+       size_t order()  const { shared_lock<shared_mutex> lock(m_mtx); return m_order;   }
+
+       friend ostream& operator<<(ostream& os, BTree& bt) {
+               return os << bt.toString();
+       }
 };
 
-const int MaxHeight = 5;
-template <typename keyType, typename ObjIDType>
-BTree<keyType, ObjIDType>::BTree(int order, bool unique)
-                               : m_Unique(unique),
-                                 m_Order(order),
-                                 m_Root(2 * order  + 1, unique),
-                                 m_NumKeys(0)
-{
-       m_Root.SetMaxKeysForChilds(order);
-       m_Height = 1;
-}
-
-template <typename keyType, typename ObjIDType>
-BTree<keyType, ObjIDType>::~BTree()
-{
-}
-
-template <typename keyType, typename ObjIDType>
-bool BTree<keyType, ObjIDType>::Insert(const keyType key, const int ObjID)
-{
-       bt_ErrorCode error = m_Root.Insert(key, ObjID);
-       if( error == bt_duplicate )
-               return false;
-       m_NumKeys++;
-       if( error == bt_overflow )
-       {
-               m_Root.SplitRoot();
-               m_Height++;
-       }
-       return true;
-}
-
-template <typename keyType, typename ObjIDType>
-bool BTree<keyType, ObjIDType>::Remove (const keyType key, const int ObjID)
-{
-       bt_ErrorCode error = m_Root.Remove(key, ObjID);
-       if( error == bt_duplicate || error == bt_nofound )
-               return false;
-       m_NumKeys--;
-
-       if( error == bt_rootmerged )
-               m_Height--;
-       return true;
-}
-
-template <typename keyType, typename ObjIDType>
-ObjIDType BTree<keyType, ObjIDType>::Search (const keyType key)
-{
-       ObjIDType ObjID = -1;
-       m_Root.Search(key, ObjID);
-       return ObjID;
-}
-
-
-template <typename keyType, typename ObjIDType>
-void BTree<keyType, ObjIDType>::ForEach(lpfnForEach2 lpfn, void *pExtra1)
-{
-       m_Root.ForEach(lpfn, 0, pExtra1);
-}
-
-template <typename keyType, typename ObjIDType>
-void BTree<keyType, ObjIDType>::ForEach(lpfnForEach3 lpfn, void *pExtra1, void *pExtra2)
-{
-       m_Root.ForEach(lpfn, 0, pExtra1, pExtra2);
-}
-
-template <typename keyType, typename ObjIDType>
-typename BTree<keyType, ObjIDType>::ObjectInfo *
-BTree<keyType, ObjIDType>::FirstThat(lpfnFirstThat2 lpfn, void *pExtra1)
-{
-       return m_Root.FirstThat(lpfn, 0, pExtra1);
-}
-
-template <typename keyType, typename ObjIDType>
-typename BTree<keyType, ObjIDType>::ObjectInfo *
-BTree<keyType, ObjIDType>::FirstThat(lpfnFirstThat3 lpfn, void *pExtra1, void *pExtra2)
-{
-       return m_Root.FirstThat(lpfn, 0, pExtra1, pExtra2);
-}
-
-template <typename keyType, typename ObjIDType>
-void BTree<keyType, ObjIDType>::Print(ostream &os){
-       m_Root.Print(os);
-}
-
-
-
-
-
-
-#endif
+#endif // BTREE_H
