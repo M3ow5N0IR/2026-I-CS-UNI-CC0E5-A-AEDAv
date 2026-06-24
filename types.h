@@ -24,4 +24,6 @@ using Direction = int;
 using Param1 = long;
 using Param2 = std::string;
 
+using TypeBTree = char;
+
 #endif // __TYPES_H__

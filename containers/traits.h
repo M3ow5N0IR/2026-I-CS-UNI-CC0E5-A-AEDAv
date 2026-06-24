@@ -47,17 +47,11 @@ struct HashTrait {
     using Container = AVLTree<AscendingTrait<AVLNode<Entry>>>;
 };
 
-// BTreeTrait
+// BTreeTrait: reusa BaseTrait
 template <typename T>
-struct AscendingBTreeTrait {
-    using value_type = T;
-    using Comp       = less<T>;
-};
+struct AscendingBTreeTrait  : public BaseTrait<VectorNode<T>, less<T>>    {};
 
 template <typename T>
-struct DescendingBTreeTrait {
-    using value_type = T;
-    using Comp       = greater<T>;
-};
+struct DescendingBTreeTrait : public BaseTrait<VectorNode<T>, greater<T>> {};
 
 #endif // __TRAITS_H__
