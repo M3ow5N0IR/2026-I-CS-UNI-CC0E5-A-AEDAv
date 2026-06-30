@@ -31,8 +31,14 @@ class BTree
        };*/
 
 public:
+       //typedef ObjectInfo iterator;
+       //typedef typename BTNode::lpfnForEach2    lpfnForEach2;
+       //typedef typename BTNode::lpfnForEach3    lpfnForEach3;
+       //typedef typename BTNode::lpfnFirstThat2  lpfnFirstThat2;
+       //typedef typename BTNode::lpfnFirstThat3  lpfnFirstThat3;
        typedef typename BTNode::ObjectInfo ObjectInfo;
 
+public:
        BTree(int order = DEFAULT_BTREE_ORDER, bool unique = true);
        ~BTree();
        //int           Open (char * name, int mode);
