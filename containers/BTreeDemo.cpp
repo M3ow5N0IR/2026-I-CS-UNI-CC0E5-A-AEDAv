@@ -1,4 +1,5 @@
 #include <iostream>
+#include <sstream>
 #include "../types.h"
 #include "BTree.h"
 using namespace std;
@@ -26,18 +27,40 @@ void BTreeDemo(ostream& os) {
     // Insercion (ObjID = i*i)
     for (T1 i = 0; keys1[i]; i++)
         bt.Insert((TypeBTree)keys1[i], (Ref)(i * i));
-    bt.Print(os);
+
+    // operator<< (imprime via ForEach, indentado por nivel)
+    os << "\n-- operator<< --" << endl;
+    os << bt;
 
     // ForEach variadico (le paso os como argumento extra)
-    os << "\nForEach:" << endl;
+    os << "\n-- ForEach --" << endl;
     bt.ForEach(ImprimirClave, os);
     os << endl;
 
     // FirstThat variadico
-    os << "\nFirstThat (primera vocal):" << endl;
+    os << "\n-- FirstThat (primera vocal) --" << endl;
     auto* encontrado = bt.FirstThat(EsVocal);
     if (encontrado)
         os << "Vocal encontrada: " << encontrado->key << " (Ref: " << encontrado->ObjID << ")" << endl;
-    else
-        os << "No se encontraron vocales." << endl;
+
+    // Forward iterator: recorrido ascendente (begin/end)
+    os << "\n-- Forward iterator (begin/end) --" << endl << "  ";
+    for (auto it = bt.begin(); it != bt.end(); ++it)
+        os << it->key << " ";
+    os << endl;
+
+    // Backward iterator: recorrido descendente (rbegin/rend)
+    os << "\n-- Backward iterator (rbegin/rend) --" << endl << "  ";
+    for (auto it = bt.rbegin(); it != bt.rend(); ++it)
+        os << it->key << " ";
+    os << endl;
+
+    // operator>> : serializo el arbol y lo reconstruyo en otro (round-trip)
+    os << "\n-- operator>> (round-trip) --" << endl;
+    stringstream ss;
+    ss << bt;                                            // serializa con operator<<
+    BTree< AscendingBTreeTrait<TypeBTree> > bt2(BTreeSize);
+    ss >> bt2;                                           // reconstruye con operator>>
+    os << "  original size=" << bt.size()
+       << " | reconstruido size=" << bt2.size() << endl;
 }

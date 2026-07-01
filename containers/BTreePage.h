@@ -62,8 +62,7 @@ class CBTreePage
        bt_ErrorCode    Insert (const keyType &key, const ObjIDType ObjID);
        bt_ErrorCode    Remove (const keyType &key, const ObjIDType ObjID);
        bool            Search (const keyType &key, long &ObjID);
-       void            Print  (ostream &os);
-       // ForEach / FirstThat como variadic
+       // ForEach / FirstThat como variadic (un solo recorrido: ver ForEach abajo)
        template <typename Func, typename... Args>
        void            ForEach(Func func, int level, Args&&... args);
        template <typename Func, typename... Args>
@@ -520,18 +519,17 @@ void CBTreePage<keyType, ObjIDType>::ForEachReverse(lpfnForEach2 lpfn, int level
        }
 }*/
 
+// Unifica ForEach y FirstThat
 template <typename Trait>
 template <typename Func, typename... Args>
 void CBTreePage<Trait>::ForEach(Func func, int level, Args&&... args)
 {
-       for( int i = 0 ; i < m_KeyCount ; i++)
-       {
-               if( m_SubPages[i] )
-                       m_SubPages[i]->ForEach(func, level+1, std::forward<Args>(args)...);
-               func(m_Keys[i], level, std::forward<Args>(args)...);
-       }
-       if( m_SubPages[m_KeyCount] )
-               m_SubPages[m_KeyCount]->ForEach(func, level+1, std::forward<Args>(args)...);
+       FirstThat(
+              [&](ObjectInfo &info, int lvl) -> bool {
+                     func(info, lvl, args...);
+                     return false;
+              },
+              level);
 }
 
 template <typename Trait>
@@ -716,21 +714,8 @@ CBTreePage<Trait>::GetFirstObjectInfo()
        return m_Keys[0];
 }
 
-// Deben eliminarlo e imprimir con un ForEach
-template <typename Trait>
-void PrintNodeHelper(tagObjectInfo<Trait> &info, int level, ostream *pExtra)
-{
-        ostream &os = *pExtra;
-        for( int i = 0; i < level ; i++)
-                os << "\t";
-        os << info.key << "->" << info.ObjID << "\n";
-}
-
-template <typename Trait>
-void CBTreePage<Trait>::Print(ostream & os)
-{
-       ForEach(PrintNodeHelper<Trait>, 0, &os);
-}
+// (El Print/PrintNodeHelper aparte se elimino: ahora la impresion se hace
+//  con ForEach desde la fachada BTree -> ver operator<< en BTree.h)
 
 template <typename Trait>
 void CBTreePage<Trait>::Create()
