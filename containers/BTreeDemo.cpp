@@ -11,12 +11,12 @@ const TypeBTree * keys3 = "DYZakHIUwxVJ203ejOP9Qc8AdtuEop1XvTRghSNbW567BfiCqrs4F
 const T1 BTreeSize = 3;
 
 // Callback variadico para ForEach: imprime la clave en el ostream recibido
-void ImprimirClave(tagObjectInfo< AscendingBTreeTrait<TypeBTree> >& info, int nivel, ostream& os) {
+void ImprimirClave(tagObjectInfo< AscendingBTreeTrait<TypeBTree> >& info, Size nivel, ostream& os) {
     os << info.key << " ";
 }
 
 // Predicado variadico para FirstThat: true si la clave es vocal
-bool EsVocal(tagObjectInfo< AscendingBTreeTrait<TypeBTree> >& info, int nivel) {
+Bool EsVocal(tagObjectInfo< AscendingBTreeTrait<TypeBTree> >& info, Size nivel) {
     TypeBTree k = info.key;
     return (k=='A'||k=='E'||k=='I'||k=='O'||k=='U' || k=='a'||k=='e'||k=='i'||k=='o'||k=='u');
 }
