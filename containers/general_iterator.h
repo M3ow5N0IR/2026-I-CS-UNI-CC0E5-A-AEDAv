@@ -77,37 +77,43 @@ public:
 };
 
 
+// snapshot_container
+template <typename T>
+struct snapshot_container {
+    using Node       = T;
+    using value_type = T;
+};
+
+
 // snapshot_iterator
 template <typename Node>
-class snapshot_iterator {
+class snapshot_iterator
+    : public general_iterator<snapshot_container<Node>, snapshot_iterator<Node>> {
 public:
-    using value_type     = Node;
-    using container_type = std::vector<Node>;
+    using Base = general_iterator<snapshot_container<Node>, snapshot_iterator<Node>>;
 
 protected:
-    std::shared_ptr<container_type> m_data;
-    Size                            m_pos;
-    static constexpr Size           npos = static_cast<Size>(-1);
+    std::shared_ptr<std::vector<Node>> m_snap;   // mantiene vivo el snapshot
 
-    void advance() { if (++m_pos >= m_data->size()) reset(); }   // hacia el final
-    void retreat() { if (m_pos == 0) reset(); else --m_pos; }    // hacia el inicio
-    void reset()   { m_data = nullptr; m_pos = npos; }
+    void advance() {                             // hacia el final
+        if (!this->m_pNode) return;
+        Node *last = m_snap->data() + m_snap->size();
+        if (++this->m_pNode >= last) this->m_pNode = nullptr;
+    }
+    void retreat() {                             // hacia el inicio
+        if (!this->m_pNode) return;
+        if (this->m_pNode == m_snap->data()) this->m_pNode = nullptr;
+        else --this->m_pNode;
+    }
 
 public:
-    snapshot_iterator() : m_data(nullptr), m_pos(npos) {}
-    snapshot_iterator(std::shared_ptr<container_type> data, Size pos)
-        : m_data(std::move(data)), m_pos(pos) {}
+    snapshot_iterator() : Base(nullptr, nullptr), m_snap(nullptr) {}
+    snapshot_iterator(std::shared_ptr<std::vector<Node>> snap, Size pos)
+        : Base(nullptr, (snap && pos < snap->size()) ? &(*snap)[pos] : nullptr),
+          m_snap(std::move(snap)) {}
 
-    const Node &operator*()  const { return (*m_data)[m_pos]; }
-    const Node *operator->() const { return &(*m_data)[m_pos]; }
-
-    Bool isEnd() const { return !m_data || m_pos == npos || m_pos >= m_data->size(); }
-
-    Bool operator==(const snapshot_iterator &other) const {
-        if (isEnd() && other.isEnd()) return true;
-        return m_data == other.m_data && m_pos == other.m_pos;
-    }
-    Bool operator!=(const snapshot_iterator &other) const { return !(*this == other); }
+    const Node &operator*()  const { return *this->m_pNode; }
+    const Node *operator->() const { return  this->m_pNode; }
 };
 
 #endif
